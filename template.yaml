@@ -1,0 +1,306 @@
+﻿AWSTemplateFormatVersion: "2010-10-09"
+Description: "Beyonity Complete AWS Infrastructure - S3, IAM, CloudWatch"
+
+Parameters:
+  Environment:
+    Type: String
+    Default: production
+    AllowedValues:
+      - development
+      - staging
+      - production
+
+Resources:
+  # S3 Production Bucket
+  ProductionBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "beyonity-3d-assets-prod-945504685795"
+      VersioningConfiguration:
+        Status: Enabled
+      AccelerateConfiguration:
+        AccelerationStatus: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # S3 Backup Bucket
+  BackupBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "beyonity-backups-945504685795"
+      VersioningConfiguration:
+        Status: Enabled
+
+  # S3 Logs Bucket
+  LogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "beyonity-logs-945504685795"
+
+  # S3 Client Share Bucket
+  ClientShareBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "beyonity-client-share-945504685795"
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteAfter7Days
+            Status: Enabled
+            ExpirationInDays: 7
+
+  # IAM Groups
+  JuniorArtistsGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: Junior-Artists
+
+  SeniorArtistsGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: Senior-Artists
+
+  ArtDirectorsGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: Art-Directors
+
+  ITAdminsGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: IT-Admins
+
+  CTOExecutivesGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: CTO-Executives
+
+  FinanceGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: Finance
+
+  HRGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: HR-Manager
+
+  # IAM Policies
+  JuniorArtistPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: Junior-Artist-Policy
+      Groups:
+        - !Ref JuniorArtistsGroup
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:ListBucket
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+            Resource:
+              - !Sub "${ProductionBucket.Arn}"
+              - !Sub "${ProductionBucket.Arn}/artists/*"
+              - !Sub "${ProductionBucket.Arn}/shared/*"
+
+  SeniorArtistPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: Senior-Artist-Policy
+      Groups:
+        - !Ref SeniorArtistsGroup
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:ListBucket
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+            Resource:
+              - !Sub "${ProductionBucket.Arn}"
+              - !Sub "${ProductionBucket.Arn}/artists/*"
+              - !Sub "${ProductionBucket.Arn}/shared/*"
+              - !Sub "${ProductionBucket.Arn}/projects/*"
+          - Effect: Allow
+            Action:
+              - ec2:DescribeInstances
+              - ec2:StartInstances
+              - ec2:StopInstances
+            Resource: "*"
+
+  ArtDirectorPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: Art-Director-Policy
+      Groups:
+        - !Ref ArtDirectorsGroup
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:ListBucket
+              - s3:GetObject
+            Resource:
+              - !Sub "${ProductionBucket.Arn}"
+              - !Sub "${ProductionBucket.Arn}/artists/*"
+              - !Sub "${ProductionBucket.Arn}/projects/*"
+          - Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:DeleteObject
+            Resource: !Sub "${ProductionBucket.Arn}/directors-cut/*"
+
+  ITAdminPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: IT-Admin-Policy
+      Groups:
+        - !Ref ITAdminsGroup
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:*
+              - iam:*
+              - ec2:*
+              - cloudwatch:*
+              - logs:*
+              - sns:*
+            Resource: "*"
+
+  CTOPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: CTO-Policy
+      Groups:
+        - !Ref CTOExecutivesGroup
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:ListBucket
+              - s3:GetObject
+            Resource: !Sub "${ProductionBucket.Arn}/*"
+          - Effect: Allow
+            Action:
+              - cloudwatch:Get*
+              - ce:Get*
+            Resource: "*"
+
+  FinancePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: Finance-Policy
+      Groups:
+        - !Ref FinanceGroup
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - ce:Get*
+              - aws-portal:ViewBilling
+            Resource: "*"
+
+  HRPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: HR-Policy
+      Groups:
+        - !Ref HRGroup
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - iam:ListUsers
+              - iam:GetUser
+              - iam:ListGroupsForUser
+            Resource: "*"
+
+  # SNS Topic for Alerts
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: "Beyonity S3 Alerts"
+      Subscription:
+        - Endpoint: "israrsadaq057@gmail.com"
+          Protocol: email
+
+  # CloudWatch Alarms
+  BucketSizeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "Beyonity-Production-Bucket-Size-Alarm-${Environment}"
+      AlarmDescription: "Alert when bucket exceeds 3 TB"
+      MetricName: BucketSizeBytes
+      Namespace: AWS/S3
+      Statistic: Average
+      Period: 86400
+      EvaluationPeriods: 1
+      Threshold: 3298534883328
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: BucketName
+          Value: !Ref ProductionBucket
+      AlarmActions:
+        - !Ref AlertTopic
+
+  HighRequestRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "Beyonity-High-Request-Rate-${Environment}"
+      AlarmDescription: "Alert when requests exceed 1000 per hour"
+      MetricName: AllRequests
+      Namespace: AWS/S3
+      Statistic: Sum
+      Period: 3600
+      EvaluationPeriods: 1
+      Threshold: 1000
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: BucketName
+          Value: !Ref ProductionBucket
+      AlarmActions:
+        - !Ref AlertTopic
+
+  HighErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "Beyonity-High-Error-Rate-${Environment}"
+      AlarmDescription: "Alert when errors exceed 10 per hour"
+      MetricName: 4xxErrors
+      Namespace: AWS/S3
+      Statistic: Sum
+      Period: 3600
+      EvaluationPeriods: 1
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: BucketName
+          Value: !Ref ProductionBucket
+      AlarmActions:
+        - !Ref AlertTopic
+
+Outputs:
+  BucketName:
+    Description: "Production S3 Bucket Name"
+    Value: !Ref ProductionBucket
+
+  BucketArn:
+    Description: "Production S3 Bucket ARN"
+    Value: !GetAtt ProductionBucket.Arn
+
+  AlertTopicArn:
+    Description: "SNS Topic ARN for Alerts"
+    Value: !Ref AlertTopic
